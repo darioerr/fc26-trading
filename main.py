@@ -9,7 +9,8 @@ import threading
 
 app = Flask(__name__)
 
-GEMINI_API_KEY = "AIzaSyDkQ1dHpCH39Jf0Wu_dtyp8GiMc4iu7gf0"
+import os
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 BUDGET_MIN = 200000
 BUDGET_MAX = 500000
