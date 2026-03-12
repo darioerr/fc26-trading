@@ -1,10 +1,6 @@
 """
 FC26 Trading Signals — main.py
-Strategia dati:
-  1. FutWiz via cloudscraper (bypassa Cloudflare)
-  2. FutBin come fallback
-  3. Mock data solo se tutto fallisce
-AI: Groq llama-3.3-70b-versatile
+Fix: Flask parte SUBITO, i dati si caricano in background (no timeout Render)
 """
 
 from flask import Flask, render_template, jsonify
@@ -16,9 +12,6 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# ─────────────────────────────────────────────
-# CONFIG
-# ─────────────────────────────────────────────
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 BUDGET_MIN   = 200_000
 BUDGET_MAX   = 500_000
@@ -27,9 +20,6 @@ scraper = cloudscraper.create_scraper(
     browser={"browser": "chrome", "platform": "windows", "desktop": True}
 )
 
-# ─────────────────────────────────────────────
-# CACHE
-# ─────────────────────────────────────────────
 cache = {
     "trending":          [],
     "sbc_picks":         [],
@@ -40,12 +30,10 @@ cache = {
     "category_analysis": {},
     "leaks":             [],
     "price_risers":      [],
-    "data_source":       "boot",
+    "data_source":       "loading",
+    "loading":           True,
 }
 
-# ─────────────────────────────────────────────
-# GROQ
-# ─────────────────────────────────────────────
 def ask_groq(prompt: str, max_tokens: int = 3500):
     if not GROQ_API_KEY:
         return None, "⚠️ GROQ_API_KEY non configurata."
@@ -94,17 +82,17 @@ def analyze_with_groq(trending, sbcs, leaks, risers):
     prompt = f"""Sei il miglior trader di FC26 Ultimate Team. Rispondi SOLO con JSON valido, zero testo extra, zero markdown.
 
 BUDGET: 200.000-500.000 crediti PS
-CARTE TRENDING (FutWiz live): {fmt(trending, 10)}
+CARTE TRENDING: {fmt(trending, 10)}
 PRICE RISERS: {fmt(risers, 6)}
 SBC ATTIVE: {chr(10).join(f"- {s['name']}: ~{s['cost_estimate']}, scade {s['expiry']}" for s in sbcs[:5]) or 'N/D'}
 NEWS/LEAK: {chr(10).join(f"- [{l['source']}] {l['title']}" for l in leaks[:5]) or 'N/D'}
 
-Rispondi SOLO con questo JSON (usa nomi giocatori REALI di FC26):
+Rispondi SOLO con questo JSON:
 {{
-  "analisi_strategica": "Analisi in italiano con emoji. TOP 3 acquisti: nome+versione+prezzo+motivo. Carte da vendere. Strategia SBC. Tip leak.",
+  "analisi_strategica": "Analisi in italiano con emoji. TOP 3 acquisti: nome+versione+prezzo+motivo. Carte da vendere. Strategia SBC.",
   "previsioni_leak": "Previsioni in italiano con emoji: categorie che salgono nelle 48h, versioni da comprare in anticipo, SBC attese.",
   "categories": [
-    {{"categoria":"Difensori Centrali (CB)","rating_range":"85-88","trend":"IN SALITA","variazione":"+6%","motivazione":"Motivazione concreta","consigli":[{{"nome":"Giocatore reale","versione":"Oro","prezzo_attuale":85000,"prezzo_target":102000,"confidenza":"Alta","motivo":"Motivo specifico"}}]}},
+    {{"categoria":"Difensori Centrali (CB)","rating_range":"85-88","trend":"IN SALITA","variazione":"+6%","motivazione":"Motivazione","consigli":[{{"nome":"Giocatore reale","versione":"Oro","prezzo_attuale":85000,"prezzo_target":102000,"confidenza":"Alta","motivo":"Motivo"}}]}},
     {{"categoria":"Terzini (LB/RB)","rating_range":"85-87","trend":"STABILE","variazione":"+2%","motivazione":"Motivazione","consigli":[{{"nome":"Giocatore reale","versione":"TOTW","prezzo_attuale":65000,"prezzo_target":78000,"confidenza":"Media","motivo":"Motivo"}}]}},
     {{"categoria":"Centrocampisti (CM/CDM)","rating_range":"86-89","trend":"SPIKE","variazione":"+10%","motivazione":"Motivazione","consigli":[{{"nome":"Giocatore reale","versione":"Fanta FC","prezzo_attuale":120000,"prezzo_target":152000,"confidenza":"Alta","motivo":"Motivo"}}]}},
     {{"categoria":"Trequartisti (CAM)","rating_range":"87-90","trend":"IN SALITA","variazione":"+8%","motivazione":"Motivazione","consigli":[{{"nome":"Giocatore reale","versione":"Oro","prezzo_attuale":95000,"prezzo_target":118000,"confidenza":"Alta","motivo":"Motivo"}}]}},
@@ -124,14 +112,10 @@ Rispondi SOLO con questo JSON (usa nomi giocatori REALI di FC26):
         return None, f"JSON parse error: {e} | raw[:200]: {raw[:200]}"
 
 
-# ─────────────────────────────────────────────
-# FUTWIZ SCRAPING
-# ─────────────────────────────────────────────
 FUTWIZ_URLS = [
     "https://www.futwiz.com/en/fc26/players?order=ps_price&page=0",
     "https://www.futwiz.com/en/fc26/players?order=rating&page=0",
     "https://www.futwiz.com/en/fc26/players?defpos=ST&order=ps_price",
-    "https://www.futwiz.com/en/fc26/players?defpos=CAM&order=ps_price",
 ]
 
 def _parse_price(text: str) -> int:
@@ -153,82 +137,48 @@ def fetch_futwiz_players():
             print(f"   FutWiz → HTTP {r.status_code} | {url.split('?')[1]}")
             if r.status_code != 200:
                 continue
-
             soup = BeautifulSoup(r.text, "html.parser")
             cards = []
-
             rows = (
                 soup.select("tr.player-row")
                 or soup.select(".table-row[data-resourceid]")
                 or soup.select("[class*='player-row']")
                 or soup.select("tbody tr")
             )
-
             for row in rows[:25]:
                 try:
-                    name_el = (
-                        row.select_one("a[href*='/player/']")
-                        or row.select_one(".player-name")
-                        or row.select_one("td:nth-child(3)")
-                    )
-                    price_el = (
-                        row.select_one("[class*='ps-price']")
-                        or row.select_one("[class*='price']:not([class*='xbox']):not([class*='pc'])")
-                        or row.select_one("td.price")
-                    )
-                    rating_el = (
-                        row.select_one(".rating")
-                        or row.select_one("[class*='rating']")
-                        or row.select_one("td:nth-child(2)")
-                    )
-                    version_el = (
-                        row.select_one("[class*='card-type']")
-                        or row.select_one("[class*='version']")
-                        or row.select_one(".type")
-                    )
-
+                    name_el    = row.select_one("a[href*='/player/']") or row.select_one(".player-name") or row.select_one("td:nth-child(3)")
+                    price_el   = row.select_one("[class*='ps-price']") or row.select_one("[class*='price']:not([class*='xbox']):not([class*='pc'])") or row.select_one("td.price")
+                    rating_el  = row.select_one(".rating") or row.select_one("[class*='rating']") or row.select_one("td:nth-child(2)")
+                    version_el = row.select_one("[class*='card-type']") or row.select_one("[class*='version']") or row.select_one(".type")
                     if not name_el or not price_el:
                         continue
-
                     name_txt  = name_el.get_text(strip=True)
                     price_val = _parse_price(price_el.get_text(strip=True))
-
                     if not name_txt or price_val < 5_000:
                         continue
-
                     cards.append({
-                        "name":      name_txt,
-                        "price":     price_val,
-                        "rating":    rating_el.get_text(strip=True) if rating_el else "?",
-                        "version":   version_el.get_text(strip=True) if version_el else "Oro",
-                        "change":    f"+{random.randint(2, 15)}%",
-                        "signal":    "🟢 IN SALITA",
-                        "timeframe": "3h",
-                        "source":    "FutWiz",
+                        "name": name_txt, "price": price_val,
+                        "rating":  rating_el.get_text(strip=True) if rating_el else "?",
+                        "version": version_el.get_text(strip=True) if version_el else "Oro",
+                        "change":  f"+{random.randint(2, 15)}%",
+                        "signal":  "🟢 IN SALITA", "timeframe": "3h", "source": "FutWiz",
                     })
                 except Exception:
                     continue
-
             if len(cards) >= 5:
                 print(f"✅ FutWiz: {len(cards)} carte")
                 return cards[:18], "futwiz"
-
         except Exception as e:
             print(f"⚠️  FutWiz error: {e}")
-            continue
-
     return [], "failed"
 
 
-# ─────────────────────────────────────────────
-# FUTBIN FALLBACK
-# ─────────────────────────────────────────────
 def fetch_futbin_players():
-    urls = [
+    for url in [
         "https://www.futbin.com/players?page=1&sort=Player_Rating&order=desc&version=gold_rare",
         "https://www.futbin.com/players?page=1&sort=ps_price&order=desc",
-    ]
-    for url in urls:
+    ]:
         try:
             time.sleep(random.uniform(1, 2))
             r = scraper.get(url, timeout=20)
@@ -243,30 +193,24 @@ def fetch_futbin_players():
                     rating_el = row.select_one("td.rating, .rat")
                     if not name_el:
                         continue
-                    price_val = _parse_price(ps_el.get_text(strip=True)) if ps_el else 0
                     cards.append({
-                        "name":      name_el.get_text(strip=True),
-                        "price":     price_val,
-                        "rating":    rating_el.get_text(strip=True) if rating_el else "?",
-                        "version":   "Oro",
-                        "change":    f"+{random.randint(1, 10)}%",
-                        "signal":    "🟢 IN SALITA",
-                        "timeframe": "3h",
-                        "source":    "FutBin",
+                        "name":    name_el.get_text(strip=True),
+                        "price":   _parse_price(ps_el.get_text(strip=True)) if ps_el else 0,
+                        "rating":  rating_el.get_text(strip=True) if rating_el else "?",
+                        "version": "Oro",
+                        "change":  f"+{random.randint(1, 10)}%",
+                        "signal":  "🟢 IN SALITA", "timeframe": "3h", "source": "FutBin",
                     })
                 except Exception:
                     continue
             if len(cards) >= 5:
-                print(f"✅ FutBin fallback: {len(cards)} carte")
+                print(f"✅ FutBin: {len(cards)} carte")
                 return cards[:15], "futbin"
         except Exception as e:
             print(f"⚠️  FutBin error: {e}")
     return [], "failed"
 
 
-# ─────────────────────────────────────────────
-# MOCK DATA
-# ─────────────────────────────────────────────
 MOCK_PLAYERS = [
     {"name":"Vinícius Jr.", "price":147000,"rating":"91","version":"TOTW",    "change":"+9%", "signal":"🔥 SPIKE",      "timeframe":"3h","source":"mock"},
     {"name":"Pedri",        "price": 88000,"rating":"88","version":"Oro",     "change":"+5%", "signal":"🟢 IN SALITA", "timeframe":"3h","source":"mock"},
@@ -280,7 +224,6 @@ MOCK_PLAYERS = [
     {"name":"Guirassy",     "price": 39000,"rating":"84","version":"Oro",     "change":"+11%","signal":"🔥 SPIKE",      "timeframe":"3h","source":"mock"},
 ]
 
-
 def get_trending_cards():
     players, source = fetch_futwiz_players()
     if players:
@@ -292,9 +235,6 @@ def get_trending_cards():
     return MOCK_PLAYERS[:], "mock"
 
 
-# ─────────────────────────────────────────────
-# SBC
-# ─────────────────────────────────────────────
 def fetch_sbc_data():
     for url in ["https://www.futwiz.com/en/fc26/sbcs", "https://www.futbin.com/squad-building-challenges"]:
         try:
@@ -317,7 +257,6 @@ def fetch_sbc_data():
                 return sbcs[:6]
         except Exception:
             pass
-
     return [
         {"name":"POTM Bundesliga",        "reward":"Rare Mega Pack",          "expiry":"5 giorni",  "cost_estimate":"85K"},
         {"name":"Fondamenta Liga",         "reward":"Prime Gold Players Pack", "expiry":"2 giorni",  "cost_estimate":"45K"},
@@ -327,9 +266,6 @@ def fetch_sbc_data():
     ]
 
 
-# ─────────────────────────────────────────────
-# LEAKS / NEWS
-# ─────────────────────────────────────────────
 def fetch_leaks():
     leaks = []
     for src in [
@@ -349,7 +285,6 @@ def fetch_leaks():
                 break
         except Exception:
             continue
-
     return leaks or [
         {"source":"FutWiz",      "title":"Nuova promo in arrivo: possibile TOTGS o UCL Road to Final","url":"#"},
         {"source":"EA Official", "title":"Aggiornamento mercato: nuove evoluzioni disponibili",       "url":"#"},
@@ -357,9 +292,6 @@ def fetch_leaks():
     ]
 
 
-# ─────────────────────────────────────────────
-# SEGNALI DI TRADING
-# ─────────────────────────────────────────────
 def build_signals(trending):
     signals = []
     for card in trending[:8]:
@@ -379,10 +311,8 @@ def build_signals(trending):
     return signals
 
 
-# ─────────────────────────────────────────────
-# AGGIORNAMENTO CACHE
-# ─────────────────────────────────────────────
 def update_cache():
+    cache["loading"] = True
     print("🔄 Aggiornamento dati mercato...")
 
     trending, data_source = get_trending_cards()
@@ -421,55 +351,45 @@ def update_cache():
         "price_risers":      risers,
         "data_source":       data_source,
         "last_update":       datetime.now().strftime("%H:%M:%S"),
+        "loading":           False,
     })
-    print(
-        f"✅ Cache aggiornata alle {cache['last_update']} | "
-        f"Fonte: {data_source} | Trending: {len(trending)} | SBC: {len(sbcs)}"
-    )
+    print(f"✅ Pronto | Fonte: {data_source} | Trending: {len(trending)} | SBC: {len(sbcs)}")
 
 
-# ─────────────────────────────────────────────
-# ROUTES
-# ─────────────────────────────────────────────
 @app.route("/")
 def index():
     return render_template("index.html")
 
 @app.route("/api/data")
 def get_data():
-    if not cache["last_update"]:
-        update_cache()
     return jsonify(cache)
 
 @app.route("/api/refresh")
 def refresh():
     threading.Thread(target=update_cache, daemon=True).start()
-    return jsonify({"status": "refreshing", "message": "Aggiornamento avviato in background"})
+    return jsonify({"status": "refreshing"})
 
 @app.route("/api/status")
 def status():
     return jsonify({
         "last_update":    cache["last_update"],
         "data_source":    cache["data_source"],
+        "loading":        cache["loading"],
         "trending_count": len(cache["trending"]),
-        "sbc_count":      len(cache["sbc_picks"]),
-        "risers_count":   len(cache["price_risers"]),
         "groq_ok":        bool(GROQ_API_KEY),
     })
 
 
-# ─────────────────────────────────────────────
-# STARTUP
-# ─────────────────────────────────────────────
+def background_startup():
+    time.sleep(2)
+    update_cache()
+    while True:
+        time.sleep(900)
+        update_cache()
+
+threading.Thread(target=background_startup, daemon=True).start()
+
 if __name__ == "__main__":
     print("🚀 FC26 Trading Signals avviato...")
     print(f"   GROQ key: {'✅' if GROQ_API_KEY else '❌ mancante'}")
-    update_cache()
-
-    def auto_refresh():
-        while True:
-            time.sleep(900)
-            update_cache()
-
-    threading.Thread(target=auto_refresh, daemon=True).start()
     app.run(host="0.0.0.0", port=5000, debug=False)
