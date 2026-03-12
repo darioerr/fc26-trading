@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FC26 Trading Signals</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold: #F5C842;
+    --gold-dim: #c9a430;
+    --green: #00E676;
+    --red: #FF1744;
+    --blue: #00B0FF;
+    --bg: #0a0c10;
+    --surface: #111318;
+    --surface2: #181c24;
+    --border: #252a35;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow', sans-serif;
+    min-height: 100vh;
+    background-image: 
+      radial-gradient(ellipse at 20% 0%, rgba(245,200,66,0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(0,176,255,0.05) 0%, transparent 50%);
+  }
+
+  /* HEADER */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    position: sticky;
+    top: 0;
+    background: rgba(10,12,16,0.95);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .logo span { color: var(--gold); }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  .live-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+    display: inline-block;
+    margin-right: 6px;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .refresh-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--gold);
+    padding: 0.4rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+
+  .refresh-btn:hover { background: var(--gold); color: #000; }
+
+  /* LAYOUT */
+  main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  /* CARDS */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    opacity: 0.5;
+  }
+
+  .card.full-width { grid-column: 1 / -1; }
+  .card.two-col { grid-column: span 2; }
+
+  .card-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .card-title .icon { font-size: 0.95rem; }
+
+  /* SIGNAL ITEMS */
+  .signal-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+
+  .signal-item:last-child { border-bottom: none; }
+
+  .signal-left { flex: 1; }
+
+  .player-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: 0.02em;
+  }
+
+  .player-meta {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .signal-right { text-align: right; }
+
+  .price {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--gold);
+  }
+
+  .change {
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  .change.up { color: var(--green); }
+  .change.down { color: var(--red); }
+
+  /* BADGES */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .badge-green { background: rgba(0,230,118,0.15); color: var(--green); border: 1px solid rgba(0,230,118,0.3); }
+  .badge-gold { background: rgba(245,200,66,0.15); color: var(--gold); border: 1px solid rgba(245,200,66,0.3); }
+  .badge-red { background: rgba(255,23,68,0.15); color: var(--red); border: 1px solid rgba(255,23,68,0.3); }
+  .badge-blue { background: rgba(0,176,255,0.15); color: var(--blue); border: 1px solid rgba(0,176,255,0.3); }
+
+  /* SIGNALS PANEL */
+  .signal-alert {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .signal-type {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 800;
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    padding: 4px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .type-buy { background: rgba(0,230,118,0.2); color: var(--green); }
+  .type-sell { background: rgba(255,23,68,0.2); color: var(--red); }
+  .type-watch { background: rgba(245,200,66,0.2); color: var(--gold); }
+
+  .signal-content { flex: 1; }
+  .signal-card-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 3px;
+  }
+
+  .signal-reason { font-size: 0.78rem; color: var(--muted); }
+  .signal-prices { font-size: 0.78rem; margin-top: 4px; }
+  .signal-prices .buy-at { color: var(--blue); font-weight: 600; }
+  .signal-prices .sell-at { color: var(--gold); font-weight: 600; }
+
+  /* AI PANEL */
+  .ai-content {
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 1.2rem;
+    font-size: 0.88rem;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    color: #c8cdd8;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .ai-content::-webkit-scrollbar { width: 4px; }
+  .ai-content::-webkit-scrollbar-track { background: var(--surface); }
+  .ai-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* SBC TABLE */
+  .sbc-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--border);
+    gap: 1rem;
+  }
+
+  .sbc-row:last-child { border-bottom: none; }
+  .sbc-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 600;
+    font-size: 0.95rem;
+    flex: 1;
+  }
+
+  .sbc-meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .sbc-cost { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; color: var(--gold); font-size: 0.95rem; }
+
+  /* STATS ROW */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    grid-column: 1 / -1;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem 1.5rem;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--gold);
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 4px;
+  }
+
+  /* LOADING */
+  .loading {
+    text-align: center;
+    padding: 3rem;
+    color: var(--muted);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 1rem;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* RESPONSIVE */
+  @media (max-width: 1024px) {
+    main { grid-template-columns: 1fr 1fr; }
+    .card.two-col { grid-column: span 2; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 640px) {
+    main { grid-template-columns: 1fr; padding: 1rem; }
+    .card.two-col, .card.full-width { grid-column: 1; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .update-time { font-size: 0.75rem; color: var(--muted); }
+  
+  .empty-msg {
+    text-align: center;
+    padding: 2rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">FC26 <span>Trading</span> Signals</div>
+  <div class="status-bar">
+    <span><span class="live-dot"></span>LIVE</span>
+    <span class="update-time" id="updateTime">Caricamento...</span>
+    <button class="refresh-btn" onclick="refreshData()">↻ Aggiorna</button>
+  </div>
+</header>
+
+<main id="mainContent">
+  <div style="grid-column: 1/-1;">
+    <div class="loading">
+      <div class="spinner"></div>
+      Caricamento dati mercato...
+    </div>
+  </div>
+</main>
+
+<script>
+let data = null;
+
+function formatPrice(p) {
+  if (!p) return "—";
+  if (p >= 1000000) return (p/1000000).toFixed(1) + "M";
+  if (p >= 1000) return (p/1000).toFixed(0) + "K";
+  return p.toString();
+}
+
+async function loadData() {
+  try {
+    const res = await fetch("/api/data");
+    data = await res.json();
+    renderDashboard();
+  } catch(e) {
+    document.getElementById("mainContent").innerHTML = `
+      <div style="grid-column:1/-1; text-align:center; padding:3rem; color:#6b7280;">
+        ⚠️ Errore nel caricamento. Riprova tra qualche secondo.
+      </div>`;
+  }
+}
+
+async function refreshData() {
+  document.getElementById("updateTime").textContent = "Aggiornamento...";
+  try {
+    await fetch("/api/refresh");
+    await loadData();
+  } catch(e) { loadData(); }
+}
+
+function renderDashboard() {
+  if (!data) return;
+
+  document.getElementById("updateTime").textContent = 
+    data.last_update ? `Aggiornato alle ${data.last_update}` : "";
+
+  const trending = data.trending || [];
+  const signals = data.signals || [];
+  const sbcs = data.sbc_picks || [];
+  const aiAnalysis = data.ai_analysis || "";
+  const leakAnalysis = data.leak_analysis || "";
+
+  const mainEl = document.getElementById("mainContent");
+  
+  mainEl.innerHTML = `
+    <!-- STATS -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">${trending.length}</div>
+        <div class="stat-label">Carte Monitorate</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${signals.length}</div>
+        <div class="stat-label">Segnali Attivi</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${sbcs.length}</div>
+        <div class="stat-label">SBC Attive</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">PS</div>
+        <div class="stat-label">Piattaforma</div>
+      </div>
+    </div>
+
+    <!-- SEGNALI AI -->
+    <div class="card two-col">
+      <div class="card-title"><span class="icon">🤖</span> Analisi AI — Segnali di Trading</div>
+      ${signals.length > 0 ? signals.map(s => `
+        <div class="signal-alert">
+          <div class="signal-type type-${s.type.toLowerCase()}">${s.type}</div>
+          <div class="signal-content">
+            <div class="signal-card-name">${s.card}</div>
+            <div class="signal-reason">${s.reason}</div>
+            <div class="signal-prices">
+              <span class="buy-at">Compra: ${formatPrice(s.price)}</span>
+              &nbsp;→&nbsp;
+              <span class="sell-at">Vendi: ${formatPrice(s.target_sell)}</span>
+              &nbsp;·&nbsp;Confidenza: <strong>${s.confidence}</strong>
+            </div>
+          </div>
+        </div>
+      `).join("") : '<div class="empty-msg">Nessun segnale nel budget 200K–500K attualmente</div>'}
+    </div>
+
+    <!-- TRENDING -->
+    <div class="card">
+      <div class="card-title"><span class="icon">📈</span> Carte in Trend (24h)</div>
+      ${trending.slice(0,8).map(c => `
+        <div class="signal-item">
+          <div class="signal-left">
+            <div class="player-name">${c.name}</div>
+            <div class="player-meta">OVR ${c.rating} · ${c.signal}</div>
+          </div>
+          <div class="signal-right">
+            <div class="price">${formatPrice(c.price)}</div>
+            <div class="change up">${c.change}</div>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+
+    <!-- SBC -->
+    <div class="card">
+      <div class="card-title"><span class="icon">🧩</span> SBC Attive</div>
+      ${sbcs.map(s => `
+        <div class="sbc-row">
+          <div>
+            <div class="sbc-name">${s.name}</div>
+            <div class="sbc-meta">Reward: ${s.reward} · Scade: ${s.expiry}</div>
+          </div>
+          <div class="sbc-cost">${s.cost_estimate}</div>
+        </div>
+      `).join("")}
+    </div>
+
+    <!-- ANALISI CLAUDE -->
+    <div class="card two-col">
+      <div class="card-title"><span class="icon">💡</span> Analisi Strategica Claude</div>
+      <div class="ai-content">${aiAnalysis || "Configura la tua API key per ricevere l'analisi AI."}</div>
+    </div>
+
+    <!-- LEAK MONITOR -->
+    <div class="card">
+      <div class="card-title"><span class="icon">🔍</span> Pattern di Mercato & Leak</div>
+      <div class="ai-content" style="max-height:280px;">${leakAnalysis || "Configura la tua API key per ricevere l'analisi dei leak."}</div>
+    </div>
+
+  `;
+}
+
+// Carica dati all'avvio
+loadData();
+
+// Auto-refresh ogni 5 minuti
+setInterval(loadData, 300000);
+</script>
+</body>
+</html>
