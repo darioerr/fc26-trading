@@ -10,7 +10,7 @@ import threading
 
 app = Flask(__name__)
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 BUDGET_MIN = 200000
 BUDGET_MAX = 500000
@@ -32,25 +32,30 @@ cache = {
     "leaks": []
 }
 
+# --- GROQ API ---
 def ask_gemini(prompt):
-    if not GEMINI_API_KEY:
-        return None, "⚠️ GEMINI_API_KEY non configurata."
+    if not GROQ_API_KEY:
+        return None, "⚠️ GROQ_API_KEY non configurata."
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"maxOutputTokens": 3000, "temperature": 0.7}
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json"
         }
-        r = requests.post(url, json=payload, timeout=45)
+        payload = {
+            "model": "llama-3.3-70b-versatile",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 3000,
+            "temperature": 0.7
+        }
+        r = requests.post(url, json=payload, headers=headers, timeout=45)
         r.raise_for_status()
         data = r.json()
-        if "candidates" not in data or not data["candidates"]:
-            return None, "⚠️ Risposta Gemini vuota"
-        return data["candidates"][0]["content"]["parts"][0]["text"], None
+        return data["choices"][0]["message"]["content"], None
     except requests.exceptions.HTTPError as e:
-        return None, f"⚠️ Errore HTTP Gemini {e.response.status_code}: {e.response.text[:200]}"
+        return None, f"⚠️ Errore Groq {e.response.status_code}: {e.response.text[:200]}"
     except Exception as e:
-        return None, f"⚠️ Errore Gemini: {str(e)}"
+        return None, f"⚠️ Errore Groq: {str(e)}"
 
 def analyze_all_with_gemini(trending_cards, sbc_data, leaks):
     trending_text = "\n".join([
@@ -144,7 +149,7 @@ def fetch_futgg_trending():
             except:
                 continue
         return get_mock_trending_data()
-    except Exception as e:
+    except:
         return get_mock_trending_data()
 
 def get_mock_trending_data():
